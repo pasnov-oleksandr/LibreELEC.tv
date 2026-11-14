@@ -1,0 +1,33 @@
+From: vpnusageo3 <vpnusageo3@gmail.com>
+Subject: [PATCH] arm: meson: read Bluetooth MAC from eFuse on Xiaomi Mi Box 4S
+
+Read the 6-byte factory Bluetooth BD_ADDR from eFuse offset 6 in
+ft_board_setup() and inject it as local-bd-address into the BCM4345C5
+device tree node so Linux initializes hci0 natively.
+---
+diff --git a/arch/arm/mach-meson/board-common.c b/arch/arm/mach-meson/board-common.c
+--- a/arch/arm/mach-meson/board-common.c
++++ b/arch/arm/mach-meson/board-common.c
+@@ -58,6 +58,23 @@ int ft_board_setup(void *blob, struct bd_info *bd)
+ {
+ 	meson_init_reserved_memory(blob);
+ 
++	if (!fdt_node_check_compatible(blob, 0, "xiaomi,mibox4")) {
++		u8 mac[ARP_HLEN], bd_addr[ARP_HLEN];
++		int offset, i;
++
++		if (meson_sm_read_efuse(6, mac, ARP_HLEN) == ARP_HLEN &&
++		    is_valid_ethaddr(mac)) {
++			for (i = 0; i < ARP_HLEN; i++)
++				bd_addr[i] = mac[ARP_HLEN - 1 - i];
++
++			offset = fdt_node_offset_by_compatible(blob, -1,
++							       "brcm,bcm4345c5");
++			if (offset >= 0)
++				fdt_setprop(blob, offset, "local-bd-address",
++					    bd_addr, ARP_HLEN);
++		}
++	}
++
+ 	return meson_ft_board_setup(blob, bd);
+ }
